@@ -73,6 +73,29 @@ class DeformNetwork(nn.Module):
             # 调试D-NeRF Dataset数据集看是否能达到更好的效果
             self.time_out = 30
 
+            '''
+            nn.Linear 是 PyTorch 中的一个模块，它实现了神经网络中的线性层，也称为全连接层（Fully Connected Layer）。
+            其数学原理基于线性代数中的矩阵乘法和向量加法。下面是 nn.Linear 的数学原理：
+            
+            权重矩阵（Weight Matrix）：nn.Linear 会创建一个权重矩阵 W，其维度为 [out_features, in_features]。
+            这里的 in_features 是输入特征的数量，out_features 是输出特征的数量，即该层的神经元数量。
+            
+            偏置向量（Bias Vector）：除了权重矩阵外，nn.Linear 还会创建一个偏置向量 b，其维度为 [out_features]。
+            偏置项是加在每个神经元输出上的常数值，用于控制神经元的激活阈值。
+            
+            线性变换（Linear Transformation）：对于输入数据 x（维度为 [batch_size, in_features]），
+            nn.Linear 执行的数学操作是 y = xW^T + b，其中 W^T 是权重矩阵 W 的转置，xW^T 表示输入数据与权重矩阵的点积，即矩阵乘法。
+            这个操作将输入特征线性组合成输出特征。
+            
+            激活函数（Activation Function）：在执行线性变换之后，通常会应用一个非线性的激活函数（如 ReLU），以引入非线性，
+            使得神经网络能够学习和模拟复杂的函数映射。这一步是可选的，取决于 nn.Linear 层后面是否有激活函数层。
+            
+            损失函数和优化（Loss Function and Optimization）：在训练过程中，通过最小化损失函数来调整权重矩阵 W 和偏置向量 b 的值。
+            常用的优化算法包括梯度下降、随机梯度下降等，这些算法通过迭代更新权重和偏置，以减小预测值和真实值之间的误差。
+            总结来说，nn.Linear 层的数学原理是通过权重矩阵和偏置向量对输入数据进行线性变换，然后可能通过一个激活函数引入非线性，
+            从而使得神经网络可以学习复杂的数据模式。
+            '''
+
             self.timenet = nn.Sequential(
                 nn.Linear(time_input_ch, 256), nn.ReLU(inplace=True),
                 nn.Linear(256, self.time_out))
@@ -123,16 +146,25 @@ class DeformNetwork(nn.Module):
         self.gaussian_scaling = nn.Linear(W, 3)
 
     def forward(self, x, t):
-        t_emb = self.embed_time_fn(t)
+        t_emb = self.embed_time_fn(t)  # 将初始输入的时间t经过频率编码1--->1*2*10+1=21
         if self.is_blender:
-            t_emb = self.timenet(t_emb)  # better for D-NeRF Dataset
-        x_emb = self.embed_fn(x)
-        h = torch.cat([x_emb, t_emb], dim=-1)
+            t_emb = self.timenet(t_emb)  # 调试D-NeRF Dataset数据集看是否能达到更好的效果
+        x_emb = self.embed_fn(x)  # 将位置坐标经过频率编码3*2*10+3=63
+        h = torch.cat([x_emb, t_emb], dim=-1)  # 21+63 = 84 拼接为初始输入
         for i, l in enumerate(self.linear):
             h = self.linear[i](h)
             h = F.relu(h)
             if i in self.skips:
                 h = torch.cat([x_emb, t_emb, h], -1)
+            '''
+            Linear(in_features=84, out_features=256, bias=True)
+            Linear(in_features=256, out_features=256, bias=True)
+            Linear(in_features=256, out_features=256, bias=True)
+            Linear(in_features=256, out_features=256, bias=True)
+            Linear(in_features=256, out_features=256, bias=True)
+            Linear(in_features=340, out_features=256, bias=True)
+            Linear(in_features=256, out_features=256, bias=True)
+            Linear(in_features=256, out_features=256, bias=True)'''
 
         if self.is_6dof:
             w = self.branch_w(h)
@@ -143,8 +175,9 @@ class DeformNetwork(nn.Module):
             screw_axis = torch.cat([w, v], dim=-1)
             d_xyz = exp_se3(screw_axis, theta)
         else:
-            d_xyz = self.gaussian_warp(h)
-        scaling = self.gaussian_scaling(h)
-        rotation = self.gaussian_rotation(h)
+            d_xyz = self.gaussian_warp(h)  # 256 ---> 3
+        scaling = self.gaussian_scaling(h)  # 256 ---> 3
+        rotation = self.gaussian_rotation(h)  # 256 ---> 4
 
+        # 返回变化值
         return d_xyz, rotation, scaling
