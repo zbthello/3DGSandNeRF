@@ -30,6 +30,8 @@ for i in range(1, 100000):
 
     loss.backward()  # 反向传播
 
+
+
     with torch.no_grad():
         optimizer.step()  # 优化器步骤:step()方法应用梯度下降（或其他优化算法），根据计算得到的梯度更新模型的参数
         optimizer.zero_grad()  # 清零梯度，为下一次迭代做准备
