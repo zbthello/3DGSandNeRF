@@ -11,7 +11,7 @@ features = features.float()
 # 计算 sample_features 和 features 之间的成对距离
 dists = torch.cdist(sample_features, features)
 
-# 获取每个样本点的 top-5 最近邻居的索引
+# 获取每个样本点的 top-3 最近邻居的索引
 _, neighbor_indices_tensor = dists.topk(3, largest=False)  # Get top-k smallest distances
 
 print(neighbor_indices_tensor)
